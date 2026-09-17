@@ -3,25 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Navrang Garba 2.0 - Staff Scanner</title>
 
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <title>Navrang Garba 2.0 - QR Scanner</title>
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #f5f5f5;
       text-align: center;
       padding: 20px;
-    }
-
-    .box {
-      max-width: 500px;
-      margin: auto;
-      background: white;
-      padding: 20px;
-      border-radius: 15px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      background: #f5f5f5;
     }
 
     h1 {
@@ -29,84 +21,186 @@
     }
 
     #reader {
-      margin-top: 20px;
+      max-width: 500px;
+      margin: 20px auto;
+      background: white;
+      padding: 10px;
+      border-radius: 12px;
     }
 
     #result {
-      margin-top: 20px;
+      max-width: 500px;
+      margin: 20px auto;
       padding: 20px;
       border-radius: 12px;
+      background: white;
       font-size: 20px;
       font-weight: bold;
     }
 
-    .waiting {
-      background: #eeeeee;
+    .allowed {
+      background: #d1fae5 !important;
+      color: #065f46;
     }
 
-    .success {
-      background: #d4edda;
-      color: #155724;
+    .denied {
+      background: #fee2e2 !important;
+      color: #991b1b;
     }
 
-    .error {
-      background: #f8d7da;
-      color: #721c24;
+    .used {
+      background: #fef3c7 !important;
+      color: #92400e;
     }
   </style>
 </head>
 
 <body>
 
-<div class="box">
-
   <h1>🎉 NAVRANG GARBA 2.0</h1>
-  <h3>STAFF ENTRY SCANNER</h3>
+  <p>Entry Pass Scanner</p>
 
   <div id="reader"></div>
 
-  <div id="result" class="waiting">
-    📷 QR scan karo
+  <div id="result">
+    📷 Scan a pass QR code
   </div>
 
-</div>
+  <script>
 
-<script>
+    // Supabase Edge Function URL
+    const VERIFY_URL =
+      "https://rdjdsqlawhawoywgvyro.supabase.co/functions/v1/verify-pass";
 
-function onScanSuccess(decodedText) {
+    let scanning = true;
 
-  document.getElementById("result").className = "success";
+    async function verifyPass(passId) {
 
-  document.getElementById("result").innerHTML =
-    "✅ QR SCANNED<br><br>" +
-    "PASS ID:<br>" +
-    decodedText;
+      if (!scanning) return;
 
-  // Scanner temporarily stop after successful scan
-  html5QrcodeScanner.clear().catch(function(error) {
-    console.log(error);
-  });
-}
+      scanning = false;
 
-function onScanFailure(error) {
-  // Normal scanning failures are ignored
-}
+      const resultBox = document.getElementById("result");
 
-const html5QrcodeScanner = new Html5QrcodeScanner(
-  "reader",
-  {
-    fps: 10,
-    qrbox: {
-      width: 250,
-      height: 250
+      resultBox.className = "";
+      resultBox.innerHTML = "⏳ Verifying Pass...";
+
+      try {
+
+        const response = await fetch(VERIFY_URL, {
+
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json"
+          },
+
+          body: JSON.stringify({
+            pass_id: passId
+          })
+
+        });
+
+        const data = await response.json();
+
+        console.log(data);
+
+        if (data.status === "ALLOWED") {
+
+          resultBox.className = "allowed";
+
+          resultBox.innerHTML =
+            "🟢 ENTRY ALLOWED<br><br>" +
+            "Name: " + data.name + "<br>" +
+            "Pass: " + data.pass_type;
+
+        }
+
+        else if (data.status === "ALREADY_USED") {
+
+          resultBox.className = "used";
+
+          resultBox.innerHTML =
+            "⚠️ PASS ALREADY USED<br><br>" +
+            "Name: " + (data.name || "");
+
+        }
+
+        else {
+
+          resultBox.className = "denied";
+
+          resultBox.innerHTML =
+            data.message || "❌ INVALID PASS";
+
+        }
+
+      }
+
+      catch (error) {
+
+        console.error(error);
+
+        resultBox.className = "denied";
+
+        resultBox.innerHTML =
+          "❌ Verification failed";
+
+      }
+
+      // 3 seconds ke baad next scan allow
+      setTimeout(() => {
+
+        scanning = true;
+
+        resultBox.className = "";
+
+        resultBox.innerHTML =
+          "📷 Scan next pass";
+
+      }, 3000);
+
     }
-  },
-  false
-);
 
-html5QrcodeScanner.render(onScanSuccess, onScanFailure);
 
-</script>
+    function onScanSuccess(decodedText) {
+
+      console.log("QR Data:", decodedText);
+
+      verifyPass(decodedText);
+
+    }
+
+
+    function onScanFailure(error) {
+
+      // Normal scanning errors ko ignore karo
+
+    }
+
+
+    const scanner = new Html5QrcodeScanner(
+
+      "reader",
+
+      {
+        fps: 10,
+        qrbox: {
+          width: 250,
+          height: 250
+        }
+      },
+
+      false
+
+    );
+
+    scanner.render(
+      onScanSuccess,
+      onScanFailure
+    );
+
+  </script>
 
 </body>
 </html>
